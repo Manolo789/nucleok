@@ -30,7 +30,8 @@ _RAY_DIR = _RAY_DIR / np.linalg.norm(_RAY_DIR)
 
 def classify_point(solid_or_tess, point, deflection: float = 0.05,
                    boundary_tol: float = 1e-6) -> Location:
-    """Classifica o ponto em relação ao sólido (via tesselação)."""
+    """Classifica o ponto em relação ao sólido (via tesselação). Para
+    malhas grandes usa BVH (cacheada na própria Tessellation)."""
     if isinstance(solid_or_tess, Tessellation):
         tess = solid_or_tess
     else:
@@ -38,6 +39,17 @@ def classify_point(solid_or_tess, point, deflection: float = 0.05,
     p = np.asarray(point, float)
     v = tess.vertices
     t = tess.triangles
+
+    if len(t) >= 64:
+        bvh = getattr(tess, "_bvh", None)
+        if bvh is None:
+            from .bvh import BVH
+            bvh = BVH(v, t)
+            tess._bvh = bvh
+        hits = bvh.ray_hits(p, _RAY_DIR)
+        if any(h < boundary_tol for h in hits):
+            return Location.ON_BOUNDARY
+        return Location.INSIDE if len(hits) % 2 == 1 else Location.OUTSIDE
 
     count = 0
     for tri in t:

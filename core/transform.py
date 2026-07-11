@@ -73,6 +73,18 @@ class Transform:
         t.m[:3, 3] = p - H @ p
         return t
 
+    @classmethod
+    def from_frame(cls, origin, xdir, ydir, zdir) -> "Transform":
+        """Transformação que leva o frame canônico (O, X, Y, Z) ao frame
+        dado — útil para posicionar geometria construída em coordenadas
+        locais."""
+        t = cls()
+        t.m[:3, 0] = np.asarray(xdir, float)
+        t.m[:3, 1] = np.asarray(ydir, float)
+        t.m[:3, 2] = np.asarray(zdir, float)
+        t.m[:3, 3] = np.asarray(origin, float)
+        return t
+
     # ---------------------------------------------------------- operações
     def __matmul__(self, other: "Transform") -> "Transform":
         return Transform(self.m @ other.m)

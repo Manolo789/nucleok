@@ -82,12 +82,20 @@ class Edge(TopoEntity):
 
     def sample(self, deflection: float, min_pts: int = 2) -> np.ndarray:
         """Polilinha da aresta (de start a end) com desvio de corda
-        ≤ deflection."""
-        from ..geom.surfaces import _adaptive_curve_params
-        ts = _adaptive_curve_params(self.curve, self.t0, self.t1,
-                                    deflection)
-        if len(ts) < min_pts:
-            ts = np.linspace(self.t0, self.t1, min_pts)
+        ≤ deflection. Círculos usam a MESMA fórmula de subdivisão da
+        tesselação em grade (garante malhas estanques entre tampas
+        planas e laterais curvas)."""
+        from ..geom.curves import Circle
+        from ..geom.surfaces import _adaptive_curve_params, _chord_divs
+        if isinstance(self.curve, Circle):
+            n = _chord_divs(self.curve.radius, abs(self.t1 - self.t0),
+                            deflection) + 1
+            ts = np.linspace(self.t0, self.t1, max(n, min_pts))
+        else:
+            ts = _adaptive_curve_params(self.curve, self.t0, self.t1,
+                                        deflection)
+            if len(ts) < min_pts:
+                ts = np.linspace(self.t0, self.t1, min_pts)
         return self.curve.evaluate(ts)
 
     def length(self) -> float:
@@ -213,12 +221,11 @@ class Solid(TopoEntity):
         return out
 
     def transformed(self, trsf) -> "Solid":
-        """Cópia transformada (a geometria compartilhada é clonada por
-        tesselação de referência — transformação profunda fica para a
-        camada de modelagem; aqui apenas o utilitário rígido básico)."""
-        raise NotImplementedError(
-            "transformação profunda de B-Rep chega com a Camada 5 "
-            "(requer clonagem geometria+topologia com mapa de entidades)")
+        """Cópia profundamente transformada (similaridades: translação,
+        rotação, escala uniforme, espelho). Implementação em
+        ``nucleok.model.ops.transform_solid``."""
+        from ..model.ops import transform_solid
+        return transform_solid(self, trsf)
 
     def __repr__(self):
         return (f"Solid#{self.id}({len(self.faces)} faces, "

@@ -14,10 +14,13 @@ Kernel independente (única dependência: NumPy), construído em camadas:
     4. ``nucleok.algo``   — interseções, classificação ponto×sólido,
                             triangulação com furos, tesselação,
                             propriedades de massa
-    5. ``nucleok.model``  — primitivas, extrusão, revolução; booleanas
-                            (API pronta, implementação = próximo marco)
+    5. ``nucleok.model``  — primitivas, extrusão, revolução (parcial e
+                            com perfis no eixo), loft, sweep, booleanas
+                            fuse/common/cut (BSP facetada + reconstrução
+                            B-Rep), chanfros e filetes, transformação
+                            profunda de sólidos
     6. ``nucleok.io``     — STEP (escritor E leitor próprios), IGES
-                            (wireframe), STL — SEM OCCT
+                            (escritor E leitor wireframe), STL — SEM OCCT
 
 Uso rápido::
 
@@ -53,14 +56,20 @@ from .algo.properties import (volume, signed_volume, surface_area,
                               centroid, edge_length_total)
 from .model.primitives import (make_box, make_cylinder, make_sphere,
                                make_torus)
-from .model.sweep import extrude, revolve
+from .model.sweep import extrude, loft, revolve, sweep_path
 from .model import boolean
+from .model.boolean import common, cut, fuse
+from .model.features import chamfer_edge, fillet_edge
+from .model.ops import (ensure_outward, solid_from_tessellation,
+                        transform_solid)
+from .algo.bvh import BVH
+from .algo.tessellate import tessellate_trimmed
 from .io.stl import write_stl, read_stl
 from .io.step_writer import write_step
 from .io.step_reader import read_step
-from .io.iges import write_iges
+from .io.iges import read_iges, write_iges
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Tolerance", "DEFAULT_TOLERANCE", "Transform",
@@ -80,6 +89,10 @@ __all__ = [
     "volume", "signed_volume", "surface_area", "centroid",
     "edge_length_total",
     "make_box", "make_cylinder", "make_sphere", "make_torus",
-    "extrude", "revolve", "boolean",
-    "write_stl", "read_stl", "write_step", "read_step", "write_iges",
+    "extrude", "revolve", "loft", "sweep_path", "boolean",
+    "fuse", "common", "cut", "chamfer_edge", "fillet_edge",
+    "transform_solid", "solid_from_tessellation", "ensure_outward",
+    "BVH", "tessellate_trimmed",
+    "write_stl", "read_stl", "write_step", "read_step",
+    "write_iges", "read_iges",
 ]

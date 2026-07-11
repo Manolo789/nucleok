@@ -335,7 +335,7 @@ class RevolutionSurface(Surface):
         z = d @ self.axis
         rmax = float(np.max(np.linalg.norm(
             d - np.multiply.outer(z, self.axis), axis=1)))
-        nv = max(2, len(_adaptive_curve_params(self.generatrix, v0, v1,
+        nv = max(1, len(_adaptive_curve_params(self.generatrix, v0, v1,
                                                deflection)) - 1)
         return (_chord_divs(rmax, u1 - u0, deflection), nv)
 
