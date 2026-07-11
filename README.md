@@ -62,3 +62,8 @@ pip install numpy
 cp -r nucleok/ seu_projeto/
 ```
 
+## Contribuidores
+
+<a href="https://github.com/Manolo789/parametricus/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Manolo789/parametricus" />
+</a>
