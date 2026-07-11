@@ -70,7 +70,6 @@ pip install numpy
 cp -r nucleok/ seu_projeto/
 ```
 
-
 ## Contribuidores
 
 <a href="https://github.com/Manolo789/nucleok/graphs/contributors">
