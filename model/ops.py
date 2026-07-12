@@ -331,7 +331,22 @@ def solid_from_tessellation(tess: Tessellation,
         healed = []
         for i, j in group_bnd[g]:
             healed += split_chain(i, j)
-        group_bnd[g] = healed
+        # cancela pares dirigidos OPOSTOS: (i,j) e (j,i) simultâneos são
+        # fendas de largura zero (artefato de cicatrização/coplanaridade),
+        # não fronteira real — mantê-los gera loops degenerados de 2
+        # arestas e espetos dentro do loop externo
+        from collections import Counter
+        bag = Counter(healed)
+        clean = []
+        for i, j in healed:
+            if bag[(j, i)] > 0 and bag[(i, j)] > 0:
+                bag[(i, j)] -= 1
+                bag[(j, i)] -= 1
+                continue
+            if bag[(i, j)] > 0:
+                bag[(i, j)] -= 1
+                clean.append((i, j))
+        group_bnd[g] = clean
 
     # ---- 4) materialização
     vmap: Dict[int, Vertex] = {}
@@ -388,7 +403,8 @@ def solid_from_tessellation(tess: Tessellation,
                         key=lambda k: -1.0 if k == prev else 1.0)
                 used.add((cur, nxt_v))
                 prev, cur = cur, nxt_v
-            loops_idx.append(loop)
+            if len(loop) >= 3:
+                loops_idx.append(loop)
 
         uv_loops = [np.array([plane.parameters_of(V[i]) for i in lp])
                     for lp in loops_idx]
