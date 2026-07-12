@@ -257,6 +257,12 @@ def solid_from_tessellation(tess: Tessellation,
     V, T = _cluster_weld(V, T, dist_tol)
     if len(T) == 0:
         raise ValueError("tesselação degenerou na solda")
+    # orientação material para fora decidida AQUI, direto da malha
+    # (evita re-tesselar o B-Rep inteiro no fim só para achar o sinal)
+    vol6 = float(np.einsum("ij,ij->i", V[T[:, 0]],
+                           np.cross(V[T[:, 1]], V[T[:, 2]])).sum())
+    if vol6 < 0.0:
+        T = T[:, ::-1]
     t = Tessellation(V, T)
     N = t.face_normals()
     offs = np.einsum("ij,ij->i", N, V[T[:, 0]])
@@ -303,42 +309,12 @@ def solid_from_tessellation(tess: Tessellation,
                     dir_edges.add((i, j))
         group_bnd[g] = list(dir_edges)
 
-    # ---- 3) cicatrização de T-vértices: qualquer vértice de fronteira
-    # colinear e interior a uma aresta de fronteira divide essa aresta
-    bnd_vids = sorted({i for bes in group_bnd.values()
-                       for e in bes for i in e})
-    bnd_pts = V[bnd_vids]
-
-    def split_chain(i, j):
-        a, b = V[i], V[j]
-        ab = b - a
-        L2 = float(ab @ ab)
-        if L2 < dist_tol * dist_tol:
-            return [(i, j)]
-        ts = []
-        rel = bnd_pts - a
-        proj = rel @ ab / L2
-        perp2 = np.einsum("ij,ij->i", rel, rel) - proj * proj * L2
-        for idx in np.nonzero((perp2 < dist_tol * dist_tol)
-                              & (proj > 1e-9) & (proj < 1 - 1e-9))[0]:
-            vid = bnd_vids[idx]
-            if vid != i and vid != j:
-                ts.append((float(proj[idx]), vid))
-        chain = [i] + [vid for _, vid in sorted(ts)] + [j]
-        return [(chain[k], chain[k + 1]) for k in range(len(chain) - 1)]
-
+    # ---- 3a) cancela fendas de largura zero (pares opostos NO grupo)
+    from collections import Counter
     for g in group_bnd:
-        healed = []
-        for i, j in group_bnd[g]:
-            healed += split_chain(i, j)
-        # cancela pares dirigidos OPOSTOS: (i,j) e (j,i) simultâneos são
-        # fendas de largura zero (artefato de cicatrização/coplanaridade),
-        # não fronteira real — mantê-los gera loops degenerados de 2
-        # arestas e espetos dentro do loop externo
-        from collections import Counter
-        bag = Counter(healed)
+        bag = Counter(group_bnd[g])
         clean = []
-        for i, j in healed:
+        for i, j in group_bnd[g]:
             if bag[(j, i)] > 0 and bag[(i, j)] > 0:
                 bag[(i, j)] -= 1
                 bag[(j, i)] -= 1
@@ -347,6 +323,61 @@ def solid_from_tessellation(tess: Tessellation,
                 bag[(i, j)] -= 1
                 clean.append((i, j))
         group_bnd[g] = clean
+
+    # ---- 3b) cicatrização de T-vértices, CIRÚRGICA: uma aresta só
+    # precisa ser dividida se seu par (não dirigido) NÃO fecha em
+    # exatamente 2 usos globais — malhas já casadas (marching cubes,
+    # tesselações harmonizadas) pulam o custo O(E·V) inteiro
+    global_use = Counter()
+    for bes in group_bnd.values():
+        for i, j in bes:
+            global_use[(min(i, j), max(i, j))] += 1
+    needs_heal = {k for k, c in global_use.items() if c != 2}
+
+    if needs_heal:
+        bnd_vids = sorted({i for bes in group_bnd.values()
+                           for e in bes for i in e})
+        bnd_pts = V[bnd_vids]
+
+        def split_chain(i, j):
+            a, b = V[i], V[j]
+            ab = b - a
+            L2 = float(ab @ ab)
+            if L2 < dist_tol * dist_tol:
+                return [(i, j)]
+            ts = []
+            rel = bnd_pts - a
+            proj = rel @ ab / L2
+            perp2 = np.einsum("ij,ij->i", rel, rel) - proj * proj * L2
+            for idx in np.nonzero((perp2 < dist_tol * dist_tol)
+                                  & (proj > 1e-9)
+                                  & (proj < 1 - 1e-9))[0]:
+                vid = bnd_vids[idx]
+                if vid != i and vid != j:
+                    ts.append((float(proj[idx]), vid))
+            chain = [i] + [vid for _, vid in sorted(ts)] + [j]
+            return [(chain[k], chain[k + 1])
+                    for k in range(len(chain) - 1)]
+
+        for g in group_bnd:
+            healed = []
+            for i, j in group_bnd[g]:
+                if (min(i, j), max(i, j)) in needs_heal:
+                    healed += split_chain(i, j)
+                else:
+                    healed.append((i, j))
+            # a divisão pode ter criado novos pares opostos no grupo
+            bag = Counter(healed)
+            clean = []
+            for i, j in healed:
+                if bag[(j, i)] > 0 and bag[(i, j)] > 0:
+                    bag[(i, j)] -= 1
+                    bag[(j, i)] -= 1
+                    continue
+                if bag[(i, j)] > 0:
+                    bag[(i, j)] -= 1
+                    clean.append((i, j))
+            group_bnd[g] = clean
 
     # ---- 4) materialização
     vmap: Dict[int, Vertex] = {}
@@ -420,4 +451,5 @@ def solid_from_tessellation(tess: Tessellation,
             topo_loops.append(Loop(oes))
         faces.append(Face(plane, topo_loops, same_sense=True))
 
-    return ensure_outward(Solid(Shell(faces)))
+    # orientação já garantida no início (volume da malha de entrada)
+    return Solid(Shell(faces))
